@@ -1,8 +1,8 @@
 {
-  "name": "@butterwell/generate-sdf",
+  "name": "@butterwell/huge-sdf",
   "version": "0.0.1",
-  "description": "Generate signed-distance-field textures",
-  "main": "dist/generate-sdf.js",
+  "description": "Generate signed-distance-field font textures",
+  "main": "dist/index.js",
   "keywords": [
     "font",
     "texture",
@@ -12,9 +12,9 @@
   "readme": "README.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Butterwell/generate-sdf.git"
+    "url": "https://github.com/Butterwell/huge-sdf.git"
   },
-  "homepage": "https://doc.babylonjs.com/extensions/moveable-type",
+  "homepage": "https://github.io/Butterwell/huge-sdf",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "prod": "webpack --env production",
