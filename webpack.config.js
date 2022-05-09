@@ -17,10 +17,10 @@ module.exports = {
     extensions: ['.tsx', '.ts', '.js'],
   },
   output: {
-    filename: 'generate-sdf.js',
+    filename: 'huge-sdf.js',
     path: path.resolve(__dirname, 'dist'),
     library: {
-      name: "generate-sdf",
+      name: "huge-sdf",
       type: "umd"
     },
   },
