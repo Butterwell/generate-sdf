@@ -1,10 +1,12 @@
 {
-  "name": "generate-sdf",
+  "name": "@butterwell/generate-sdf",
   "version": "0.0.1",
   "description": "Generate signed-distance-field textures",
   "main": "dist/generate-sdf.js",
   "keywords": [
-    "font"
+    "font",
+    "texture",
+    "png"
   ],
   "author": "Christopher Michael Buck",
   "readme": "README.md",
