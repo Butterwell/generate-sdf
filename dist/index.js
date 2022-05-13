@@ -14329,27 +14329,32 @@ function distanceSquared(x, y, p) {
     var dy = p.y - y;
     return dx * dx + dy * dy;
 }
+function nomralize(raw, svgDomainSize, padAsMultipleOfSvgDomainSize) {
+    var range = svgDomainSize * padAsMultipleOfSvgDomainSize * 2;
+    var max = range / 2;
+    var min = -max;
+    var normed = raw.map(function (v) { return v < min ? 0 : v > max ? 1 : (v / range) + 0.5; });
+    return normed;
+}
 function distanceToPath(x, y, path) {
-    // point: {x, y}
-    // path: svg Path
     var pathLength = path.getTotalLength();
+    // TODO Test this heristic with complicated letters (or just change to 32)
     var chunk = pathLength / 8.0;
     var chunks = [0, chunk, chunk * 2, chunk * 3, chunk * 4, chunk * 5, chunk * 6, chunk * 7, pathLength];
+    // Find closest point of initial choices
     var best = chunks.reduce(function (previous, current) {
         var point = path.getPointAtLength(current);
         var distance2 = distanceSquared(x, y, point);
         var result = distance2 < previous.distance ? { length: current, distance: distance2 } : previous;
         return result;
     }, { length: 0, distance: Infinity });
+    // Near-binary search
     chunk *= 0.51;
-    var i = 0;
     while (chunk > 0.0000001) {
         var aLength = best.length - chunk;
         var bLength = best.length + chunk;
         var aDistance = aLength > 0 ? distanceSquared(x, y, path.getPointAtLength(aLength)) : Infinity;
         var bDistance = bLength < pathLength ? distanceSquared(x, y, path.getPointAtLength(bLength)) : Infinity;
-        console.log(aLength, aDistance);
-        console.log(bLength, bDistance);
         if (aDistance < best.distance) {
             best = { length: aLength, distance: aDistance };
         }
@@ -14357,56 +14362,82 @@ function distanceToPath(x, y, path) {
             best = { length: bLength, distance: bDistance };
         }
         else {
-            chunk *= 0.51;
+            chunk *= 0.51; // Only divide if no change
         }
-        i++;
-        console.log(chunk, best, i);
     }
     return Math.sqrt(best.distance);
 }
-// TODO add one-pixel svg to current page
-function generateArrayFromPath(pathString) {
+function generateArrayFromPath(pathString, sdfSize, svgDomainSize, padAsMultipleOfSvgDomainSize) {
     var pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    //const svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    // svg.appendChild(pathEl)
-    // pathEl.setAttribute('d', aPathData);
-    // distanceToPath(16, -16, pathEl)
-    // var point = pathEl.getPointAtLength(0)
-    // for (var x=0; x < 70; x++) {
-    //   for (var y=0; y < 70; y++) {
-    //     point.x = x
-    //     point.y = y
-    //     var isIn = pathEl.isPointInFill(point)
-    //     if (isIn) console.log(isIn)
-    //   }
-    // }
+    var svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svgElement.appendChild(pathElement);
+    svgElement.style.width = "1px";
+    svgElement.style.height = "1px";
+    svgElement.style.position = "fixed";
+    svgElement.style.top = "0";
+    svgElement.style.left = "0";
+    document.body.appendChild(svgElement);
     pathElement.setAttribute('d', pathString);
-    return [distanceToPath(0, 0, pathElement)];
+    var domainSize = svgDomainSize + (svgDomainSize * padAsMultipleOfSvgDomainSize);
+    var midDomain = domainSize / 2;
+    var box = svgElement.getBBox();
+    var step = domainSize / sdfSize;
+    var halfStep = step / 2;
+    var midX = box.x + (box.width / 2);
+    var startX = midX - midDomain - halfStep;
+    var midY = box.y + (box.height / 2);
+    var startY = midY - midDomain - halfStep;
+    // The glyph units are scaled by 1 / (unitsPerEm * 72) - 72 pixels
+    var raw = Array(sdfSize * sdfSize);
+    var point = pathElement.getPointAtLength(0); // create a point to work with
+    var x = startX;
+    var y = startY;
+    for (var i = 0; i < sdfSize; i++) {
+        y += step;
+        x = startX;
+        for (var j = 0; j < sdfSize; j++) {
+            x += step;
+            point.x = x;
+            point.y = y;
+            var isIn = pathElement.isPointInFill(point);
+            if (isIn)
+                console.log(isIn);
+            var distance = distanceToPath(x, y, pathElement);
+            raw[i * sdfSize + j] = isIn ? distance : -distance;
+        }
+    }
+    var result = nomralize(raw, svgDomainSize, padAsMultipleOfSvgDomainSize);
+    return result;
 }
 
 function generateArrayFromChar(char, font, size) {
     var aGlyph = font.charToGlyph(char);
     var aPath = aGlyph.getPath(0, 0, 72); // x, y, font size in pixels
     var aPathData = aPath.toPathData(14); // decimal places
-    var data = generateArrayFromPath(aPathData);
+    var data = generateArrayFromPath(aPathData, size, 72, 0.1);
     return data;
 }
-var fontName = "https://fonts.gstatic.com/s/roboto/v29/KFOlCnqEu92Fr1MmEU9fChc9.ttf";
-//const opentype = "https://cdn.skypack.dev/opentype.js@1.3.3"
-function sdfForRoboto(callback) {
-    //  const opentypePromise = import(opentype)
-    fetch(fontName)
+// TODO move to a lookup service
+var roboto_regular = "https://fonts.gstatic.com/s/roboto/v29/KFOlCnqEu92Fr1MmEU9fChc9.ttf";
+var knownFonts = {
+    "Roboto": roboto_regular,
+    "Roboto-Regular": roboto_regular
+};
+function getFont(fontName) {
+    var url = knownFonts[fontName];
+    return fetch(url)
         .then(function (response) { return response.blob(); })
-        .then(function (data) { return data.arrayBuffer(); })
+        .then(function (data) { return data.arrayBuffer(); });
+}
+function sdfForRoboto(callback) {
+    getFont('Roboto')
         .then(function (ttf) {
-        //      opentypePromise.then((opentype) => {
         var font = parseBuffer(ttf);
         console.log(font);
-        var sdfArray = generateArrayFromChar('a', font);
+        var sdfArray = generateArrayFromChar('a', font, 16);
         callback(sdfArray);
-        //      })
     });
 }
 
-export { generateArrayFromChar, sdfForRoboto };
+export { generateArrayFromChar, getFont, sdfForRoboto };
 //# sourceMappingURL=index.js.map
